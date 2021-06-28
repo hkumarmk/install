@@ -1,3 +1,4 @@
+#
 set -a
 ## One may set appropriate environment variables to overrride below entries
 CASSANDRA_CLUSTER_NAME="${CASSANDRA_CLUSTER_NAME:-cluster1}"
