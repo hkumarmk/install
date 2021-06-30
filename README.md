@@ -32,3 +32,6 @@ Default variables shall work for minikube, which may be overridden to work with 
 | CASSANDRA_REPLICATION_FACTOR | Cassandra replication factor, default `1`
 | CASSANDRA_CLUSTER_SIZE | Cassandra cluster size, default `1`
 | TEMPORAL_RELEASE_NAME | Helm release name - only need to check if you run multiple temporal releases, default `t1`|
+
+## Reference
+* https://github.com/temporalio/samples-go/tree/master/child-workflow-continue-as-new

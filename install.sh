@@ -1,5 +1,11 @@
 #
 set -a
+# Optional first argument to this script is an env file which
+# may used to override certain variable as mentioned below
+if [ -n "$1" ]; then
+  source $1
+fi
+
 ## One may set appropriate environment variables to overrride below entries
 CASSANDRA_CLUSTER_NAME="${CASSANDRA_CLUSTER_NAME:-cluster1}"
 CASSANDRA_STORAGE_CLASS="${CASSANDRA_STORAGE_CLASS:-standard}"
@@ -8,10 +14,13 @@ CASSANDRA_DC_NAME="${CASSANDRA_DC_NAME:-dc1}"
 CASSANDRA_REPLICATION_FACTOR="${CASSANDRA_REPLICATION_FACTOR:-1}"
 CASSANDRA_CLUSTER_SIZE="${CASSANDRA_CLUSTER_SIZE:-1}"
 
+# Below env vars will be used to limit pod memory/cpu for cassandra PODs
+CASSANDRA_POD_MEMORY=${CASSANDRA_POD_MEMORY}
+CASSANDRA_POD_CPU=${CASSANDRA_POD_CPU}
+
 TEMPORAL_RELEASE_NAME="${TEMPORAL_RELEASE_NAME:-t1}"
 
 ########## One will not be able to override below variables
-
 CASSANDRA_ADMIN_USERNAME="cass-superuser"
 CASSANDRA_ADMIN_SECRET_NAME="cassandra-${CASSANDRA_CLUSTER_NAME}-admin"
 
@@ -69,19 +78,38 @@ install_cassandra_cluster() {
   export CASSANDRA_ADMIN_PASSWORD=$(kubectl -n $CASSANDRA_NAMESPACE get secret $CASSANDRA_ADMIN_SECRET_NAME -o json | jq -r '.data.password' | base64 --decode)
   # Copy secret to  temporal namespace - secret is local to namespace.
   # TODO: once operator can monitor other namespaces, we may install cassandra also in same namespace
-  kubectl -n $CASSANDRA_NAMESPACE get secret $CASSANDRA_ADMIN_SECRET_NAME -o yaml | \
-    grep -v "namespace:" |kubectl -n $TEMPORAL_NAMESPACE apply -f -
+  kubectl -n $TEMPORAL_NAMESPACE  get secrets $CASSANDRA_ADMIN_SECRET_NAME -o name &> /dev/null
+  if [[ $? -ne 0 ]]; then
+    kubectl -n $CASSANDRA_NAMESPACE get secret $CASSANDRA_ADMIN_SECRET_NAME -o yaml | \
+      grep -v "namespace:" |kubectl -n $TEMPORAL_NAMESPACE apply -f -
+  fi
 
   # Add secret name for superuser, update storage class name and size
   # It use yq - install yq using pip install yq
   # You may have to add the install path to $PATH
-  curl -s ${CASSANDRA_CLUSTER_MANIFEST} | yq -r '
+  yml=$(curl -s ${CASSANDRA_CLUSTER_MANIFEST} | yq -r '
     .spec += {"superuserSecretName": env.CASSANDRA_ADMIN_SECRET_NAME} |
     .spec.storageConfig.cassandraDataVolumeClaimSpec.storageClassName=env.CASSANDRA_STORAGE_CLASS |
     .spec.storageConfig.cassandraDataVolumeClaimSpec.resources.requests.storage=env.CASSANDRA_STORAGE_SIZE |
     .spec.size=(env.CASSANDRA_CLUSTER_SIZE | tonumber) |
     .metadata.name=env.CASSANDRA_DC_NAME
-  ' | kubectl -n $CASSANDRA_NAMESPACE apply -f -
+  ')
+
+  if [ -n "$CASSANDRA_POD_MEMORY" ]; then
+    yml=$(echo "$yml" | yq -r '
+      .spec.resources.requests.memory=env.CASSANDRA_POD_MEMORY |
+      .spec.resources.limit.memory=env.CASSANDRA_POD_MEMORY
+    ')
+  fi
+
+  if [ -n "$CASSANDRA_POD_CPU" ]; then
+    yml=$(echo "$yml" | yq -r '
+      .spec.resources.requests.cpu=env.CASSANDRA_POD_CPU |
+      .spec.resources.limit.cpu=env.CASSANDRA_POD_CPU
+    ')
+  fi
+
+  echo "$yml" | kubectl -n $CASSANDRA_NAMESPACE apply -f -
   
   echo "Waiting for cassandra cluster to come up"
   # Wait till cassandra cluster is up
@@ -168,4 +196,4 @@ main() {
 main
 
 # Get grafana admin password by
-# kubectl get secret --namespace temporal t1-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+# kubectl get secret --namespace temporal t1-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo  
