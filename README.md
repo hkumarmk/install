@@ -13,6 +13,10 @@ You may have to update below variables by creating an env file with values to be
 source that env file and run this script.
 This script must be executed under the directory where temporal helm chart repository is checked out
 
+## TODO/issues
+* Elasticsearch have to update vm.max_map_count sysctl value to the required minimum of 262144. But without privileged containers you will not be able to do it from within helmchart. 
+  * Also gcp with autopilot mode doesnt support privileged container, also they dont give access to underlying nodes. This could be a problem to use autopilot mode with Elasticsearch.
+
 ### Example:
 ```
 $ git checkout https://github.com/temporalio/helm-charts.git temporal-helm-charts

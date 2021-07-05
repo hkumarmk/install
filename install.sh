@@ -7,6 +7,10 @@ if [ -n "$1" ]; then
 fi
 
 ## One may set appropriate environment variables to overrride below entries
+CLUSTER_NAME=${CLUSTER_NAME}
+if [ -z "${CLUSTER_NAME}" ]; then
+  echo "ERROR! Please set a unique CLUSTER_NAME environment variable to use for ingress name"
+fi
 CASSANDRA_CLUSTER_NAME="${CASSANDRA_CLUSTER_NAME:-cluster1}"
 CASSANDRA_STORAGE_CLASS="${CASSANDRA_STORAGE_CLASS:-standard}"
 CASSANDRA_STORAGE_SIZE="${CASSANDRA_STORAGE_SIZE:-500Mi}"
@@ -160,7 +164,12 @@ install_temporal() {
   # This should be executed from within temporal helm chart cloned directory
   # https://github.com/temporalio/helm-charts
   helm dependencies update
-  helm install -n $TEMPORAL_NAMESPACE \
+  helm_op="install"
+  helm -n $TEMPORAL_NAMESPACE list -q | grep -q "^$TEMPORAL_RELEASE_NAME$"
+  if [ $? == 0 ]; then
+    helm_op=upgrade
+  fi
+  helm ${helm_op} -n $TEMPORAL_NAMESPACE \
     --set schema.setup.enabled=true \
     --set elasticsearch.antiAffinity=soft \
     --set server.replicaCount=1 \
@@ -169,6 +178,10 @@ install_temporal() {
     --set prometheus.enabled=true \
     --set grafana.enabled=true \
     --set grafana.service.type=NodePort \
+    --set grafana.ingress.enabled=true \
+    --set grafana.ingress.path="/*" \
+    --set grafana.ingress.hosts={"grafana.${CLUSTER_NAME}.maira.local"} \
+    --set grafana.ingress.tls[0].hosts={"grafana.${CLUSTER_NAME}.maira.local"} \
     --set elasticsearch.enabled=true \
     --set server.config.persistence.default.cassandra.hosts=${CASSANDRA_CLUSTER_NAME}-${CASSANDRA_DC_NAME}-service.${CASSANDRA_NAMESPACE} \
     --set server.config.persistence.default.cassandra.port=${CASSANDRA_PORT} \
