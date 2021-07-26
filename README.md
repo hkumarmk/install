@@ -21,7 +21,7 @@ This script must be executed under the directory where temporal helm chart repos
 ```
 $ git checkout https://github.com/temporalio/helm-charts.git temporal-helm-charts
 $ cd temporal-helm-charts/
-$ source ../install/sample.env; ../install/install.sh
+$ ../install/install.sh ../install/sample.env
 # Where my_setup.env contain any overridden environment variables
 ```
 
